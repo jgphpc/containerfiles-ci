@@ -4,6 +4,8 @@ FROM quay.io/ethcscs/comm-fwk:ofi2.3-ucx1.19-cuda13.0 AS mpich_build
 # podman build -t nccl-tests-mpich-cuda -f Containerfile.map .
 # enroot import podman://nccl-tests-mpich-cuda:latest
 # mv nccl-tests-mpich-cuda+latest.sqsh ofi2.3-ucx1.19-cuda13.0-mpich4.3.2-ncclt-2.17.6.sqfs
+# uenv run ./ofi2.3-ucx1.19-cuda13.0-mpich4.3.2-ncclt-2.17.6.sqfs:/user-environment -- ls -l /user-environment/lib/libfabric.so.1
+# -> libfabric.so.1.29.1
 
 ARG MPI_VER=4.3.2
 
