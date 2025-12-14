@@ -1,0 +1,47 @@
+# vi: ft=dockerfile
+FROM quay.io/ethcscs/comm-fwk:ofi1.22-ucx1.19-cuda13.0 AS mpich_build
+#old: FROM quay.io/ethcscs/comm-fwk:ofi1.15-ucx1.18-cuda12.8 AS mpich_build
+# podman build -t cuda13-ofi1 -f Containerfile.map-cuda13-ofi1 .
+# enroot import podman://cuda13-ofi1:latest
+# mv cuda13-ofi1.sqsh ofi1.22-ucx1.19-cuda13.0-mpich4.3.2-ncclt-2.17.6.sqfs
+# uenv run ./ofi1.22-ucx1.19-cuda13.0-mpich4.3.2-ncclt-2.17.6.sqfs:/user-environment -- ls -l /user-environment/lib/libfabric.so.1
+# -> libfabric.so.1.25.0
+
+ARG MPI_VER=4.3.2
+
+RUN echo "--- MPICH" \
+    # && find /usr/local/cuda/ -type f \
+    # && exit 0 \
+    && wget -q https://www.mpich.org/static/downloads/${MPI_VER}/mpich-${MPI_VER}.tar.gz \
+    && tar xf mpich-${MPI_VER}.tar.gz \
+    && cd mpich-${MPI_VER} \
+    && ./autogen.sh \
+    && ./configure --prefix=/usr --enable-fast=O3,ndebug \
+       --disable-fortran --disable-cxx \
+       --with-device=ch4:ofi --with-libfabric=/usr \
+       --with-cuda=/usr/local/cuda \
+       --with-cuda-sm=90 \
+       CFLAGS="-L/usr/local/cuda/targets/sbsa-linux/lib/stubs/ -lcuda" \
+       CXXFLAGS="-L/usr/local/cuda/targets/sbsa-linux/lib/stubs/ -lcuda" \
+    && make -j$(nproc) \
+    && make install \
+    && ldconfig \
+    && cd .. \
+    && rm -rf mpich-${MPI_VER}.tar.gz mpich-${MPI_VER}
+
+FROM quay.io/ethcscs/comm-fwk:ofi1.22-ucx1.19-cuda13.0
+
+COPY --from=mpich_build /usr /usr
+ARG nccl_tests_version=2.17.6
+
+RUN echo "--- NCCL" \
+    && wget -q -O nccl-tests-${nccl_tests_version}.tar.gz https://github.com/NVIDIA/nccl-tests/archive/refs/tags/v${nccl_tests_version}.tar.gz \
+    && tar xf nccl-tests-${nccl_tests_version}.tar.gz \
+    && cd nccl-tests-${nccl_tests_version} \
+    && pwd \
+    && MPI=1 make -j$(nproc) \
+       CXX='mpicxx -g' \
+       NVCC_GENCODE="-gencode=arch=compute_90,code=sm_90" \
+       BIN_FILES_LIST=all_reduce \
+    && cd .. \
+    && rm -rf nccl-tests-${nccl_tests_version}.tar.gz
